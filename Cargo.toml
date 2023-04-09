@@ -1,0 +1,36 @@
+[package]
+name = "rhai-ml"
+version = "0.1.0"
+edition = "2021"
+authors = ["Chris McComb <ccmcc2012@gmail.com>"]
+description = "Machine learning in the Rhai scripting language"
+repository = "https://github.com/rhaiscript/rhai-ml"
+homepage = "https://github.com/rhaiscript/rhai-ml"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+keywords = ["scripting", "rhai", "machine-learning", "scripting-language", "matlab"]
+categories = ["algorithms", "science"]
+documentation = "https://docs.rs/rhai-ml"
+build = "build.rs"
+
+
+[features]
+default = []
+metadata = ["rhai/metadata"]
+
+[dependencies]
+rhai = ">=1.8.0"
+smartstring = "1.0.1"
+smartcorelib = {version = "0.3.0", package = "smartcore", features=["serde"]}
+bincode = { version = "1.3.3"}
+
+[build-dependencies]
+rhai = ">=1.8.0"
+serde_json = "1.0.82"
+serde = "1.0.140"
+smartstring = "1.0.1"
+smartcorelib = {version = "0.3.0", package = "smartcore", features=["serde"]}
+bincode = { version = "1.3.3" }
+
+[package.metadata.docs.rs]
+all-features = true
