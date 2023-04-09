@@ -26,15 +26,21 @@ rhai-ml = { git = "https://github.com/cmccomb/rhai-ml" }
 Using this crate is pretty simple! If you just want to evaluate a single line of [`Rhai`](https://rhai.rs/), then you only need:
 
 ```rust
-use rhai::INT;
+use rhai::FLOAT;
 use rhai_ml::eval;
-let result = eval::<INT>("5+2").unwrap();
+let result = eval::<FLOAT>("\
+let xdata = [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0]]; \
+let ydata = [1.0, 2.0, 3.0]; \
+let model = train(xdata, ydata, \"linear\"); \
+let ypred = predict(xdata, model);
+ypred[0]
+").unwrap();
 ```
 
 If you need to use `rhai-ml` as part of a persistent [`Rhai`](https://rhai.rs/) scripting engine, then do this instead:
 
 ```rust
-use rhai::{Engine, packages::Package, INT};
+use rhai::{Engine, packages::Package, FLOAT};
 use rhai_ml::MLPackage;
 
 // Create a new Rhai engine
@@ -44,7 +50,13 @@ let mut engine = Engine::new();
 engine.register_global_module(MLPackage::new().as_shared_module());
 
 // Now run your code
-let value = engine.eval::<INT>("5+2").unwrap();
+let value = engine.eval::<FLOAT>("\
+let xdata = [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0]]; \
+let ydata = [1.0, 2.0, 3.0]; \
+let model = train(xdata, ydata, \"linear\"); \
+let ypred = predict(xdata, model);
+ypred[0]
+").unwrap();
 ```
 
 # Features

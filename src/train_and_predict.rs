@@ -9,6 +9,7 @@ pub mod train_and_predict_functions {
     use smartcorelib::{
         linalg::basic::matrix::DenseMatrix,
         linear::{
+            lasso::{Lasso, LassoParameters},
             linear_regression::{LinearRegression, LinearRegressionParameters},
             logistic_regression::{LogisticRegression, LogisticRegressionParameters},
         },
@@ -40,6 +41,7 @@ pub mod train_and_predict_functions {
     /// function Available model types are:
     /// 1. `linear` - ordinary least squares linear regression
     /// 2. `logistic` - logistic regression
+    /// 3. `lasso` - lasso regression
     /// ```typescript
     /// let xdata = [[1.0, 2.0],
     ///              [2.0, 3.0],
@@ -79,6 +81,22 @@ pub mod train_and_predict_functions {
                     }
                 }
             }
+            "lasso" => {
+                let yvec = y
+                    .clone()
+                    .into_iter()
+                    .map(|el| el.as_float().unwrap())
+                    .collect::<Vec<FLOAT>>();
+                match Lasso::fit(&xvec, &yvec, LassoParameters::default()) {
+                    Ok(model) => Ok(Model {
+                        saved_model: bincode::serialize(&model).unwrap(),
+                        model_type: algorithm_string.to_string(),
+                    }),
+                    Err(e) => {
+                        Err(EvalAltResult::ErrorArithmetic(format!("{e}"), Position::NONE).into())
+                    }
+                }
+            }
             "logistic" => {
                 let yvec = y
                     .clone()
@@ -104,7 +122,9 @@ pub mod train_and_predict_functions {
         }
     }
 
-    /// Uses a [`smartcore`](https://smartcorelib.org/) machine learning model (trained with the [`train`](#trainx-array-y-array-algorithm-immutablestring---model) function to predict dependent variables.
+    /// Uses a [`smartcore`](https://smartcorelib.org/) machine learning model (trained with the
+    /// [`train`](#trainx-array-y-array-algorithm-immutablestring---model) function to predict
+    /// dependent variables.
     /// ```typescript
     /// let xdata = [[1.0, 2.0],
     ///              [2.0, 3.0],
@@ -127,6 +147,19 @@ pub mod train_and_predict_functions {
         match algorithm_string {
             "linear" => {
                 let model_ready: LinearRegression<FLOAT, FLOAT, DenseMatrix<FLOAT>, Vec<FLOAT>> =
+                    bincode::deserialize(&*model.saved_model).unwrap();
+                return match model_ready.predict(&xvec) {
+                    Ok(y) => Ok(y
+                        .into_iter()
+                        .map(|observation| Dynamic::from_float(observation))
+                        .collect::<Vec<Dynamic>>()),
+                    Err(e) => {
+                        Err(EvalAltResult::ErrorArithmetic(format!("{e}"), Position::NONE).into())
+                    }
+                };
+            }
+            "lasso" => {
+                let model_ready: Lasso<FLOAT, FLOAT, DenseMatrix<FLOAT>, Vec<FLOAT>> =
                     bincode::deserialize(&*model.saved_model).unwrap();
                 return match model_ready.predict(&xvec) {
                     Ok(y) => Ok(y
