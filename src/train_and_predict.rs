@@ -1,5 +1,6 @@
 use rhai::plugin::*;
 
+/// Documentation for the module
 #[export_module]
 pub mod train_and_predict_functions {
 
@@ -13,8 +14,7 @@ pub mod train_and_predict_functions {
         },
     };
 
-
-     fn array_to_vec_float(arr: &mut Array) -> Vec<FLOAT> {
+    fn array_to_vec_float(arr: &mut Array) -> Vec<FLOAT> {
         arr.into_iter()
             .map(|el| el.as_float().unwrap())
             .collect::<Vec<FLOAT>>()

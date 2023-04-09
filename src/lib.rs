@@ -1,6 +1,5 @@
 #![warn(clippy::all)]
 #![warn(missing_docs)]
-#![warn(clippy::missing_docs_in_private_items)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!(concat!(env!("OUT_DIR"), "/rhai-ml-docs.md"))]
 #![doc = include_str!("../docs/highlight.html")]
