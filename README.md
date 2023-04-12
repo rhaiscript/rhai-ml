@@ -1,4 +1,4 @@
-[![Github CI](https://github.com/rhaiscript/rhai-ml/actions/workflows/tests.yml/badge.svg)](https://github.com/rhaiscript/rhai-ml/actions)
+[![Github CI](https://github.com/cmccomb/rhai-ml/actions/workflows/tests.yml/badge.svg)](https://github.com/cmccomb/rhai-ml/actions)
 [![Crates.io](https://img.shields.io/crates/v/rhai-ml.svg)](https://crates.io/crates/rhai-ml)
 [![docs.rs](https://img.shields.io/docsrs/rhai-ml/latest?logo=rust)](https://docs.rs/rhai-ml)
 
