@@ -1,6 +1,6 @@
 [package]
 name = "rhai-ml"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Chris McComb <ccmcc2012@gmail.com>"]
 description = "Machine learning in the Rhai scripting language"
@@ -20,16 +20,16 @@ metadata = ["rhai/metadata"]
 [dependencies]
 rhai = ">=1.0.0"
 smartstring = ">=1.0.0"
-smartcorelib = {version = ">=0.3.0", package = "smartcore", features=["serde"]}
-bincode = { version = ">=1.0.0"}
+smartcorelib = { version = ">=0.3.0", package = "smartcore", features = ["serde"] }
+bincode = { version = ">=1.0.0" }
 
 [build-dependencies]
 rhai = ">=1.0.0"
 serde_json = ">=1.0.0"
 serde = ">=1.0.0"
 smartstring = ">=1.0.0"
-smartcorelib = {version = ">=0.3.0", package = "smartcore", features=["serde"]}
-bincode = { version = ">=1.0.0"}
+smartcorelib = { version = ">=0.3.0", package = "smartcore", features = ["serde"] }
+bincode = { version = ">=1.0.0" }
 
 [package.metadata.docs.rs]
 all-features = true

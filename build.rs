@@ -16,6 +16,12 @@ fn main() {
     use std::collections::HashMap;
     use std::io::Write;
 
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    struct Metadata {
+        #[serde(default)]
+        pub functions: Vec<Function>,
+    }
+
     #[allow(non_snake_case)]
     #[derive(Serialize, Deserialize, Debug, Clone)]
     struct Function {
@@ -40,25 +46,30 @@ fn main() {
         std::fs::File::create(std::env::var("OUT_DIR").unwrap() + "/rhai-ml-docs.md").unwrap();
 
     // Make a file for tests
-    let mut test_file = std::fs::File::create(std::env::var("OUT_DIR").unwrap() + "/rhai-ml-tests.rs").unwrap();
+    let mut test_file =
+        std::fs::File::create(std::env::var("OUT_DIR").unwrap() + "/rhai-ml-tests.rs").unwrap();
 
     // Build an engine for doctests
     let mut engine = Engine::new();
 
     // Add custom functions from Rust
     let mut lib = Module::new();
-    combine_with_exported_module!(&mut lib, "rhai_ml_train_and_predict", train_and_predict_functions);
+    combine_with_exported_module!(
+        &mut lib,
+        "rhai_ml_train_and_predict",
+        train_and_predict_functions
+    );
     engine.register_global_module(rhai::Shared::new(lib));
 
     // Extract metadata
     let json_fns = engine.gen_fn_metadata_to_json(false).unwrap();
     println!("{json_fns}");
-    let v: HashMap<String, Vec<Function>> = serde_json::from_str(&json_fns).unwrap();
-    for function in v["functions"].clone() {
+    let v: Metadata = serde_json::from_str(&json_fns).unwrap();
+    for function in &v.functions {
         println!("{:?}", function);
     }
 
-    let function_list = v["functions"].clone();
+    let function_list = v.functions;
 
     // Write functions
     write!(doc_file, "\n# API\n This package provides a large variety of functions to help with machine learning and artificial intelligence:\n").expect("Cannot write to {doc_file}");
