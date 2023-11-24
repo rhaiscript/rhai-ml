@@ -1,4 +1,4 @@
-[![Github CI](https://github.com/cmccomb/rhai-ml/actions/workflows/tests.yml/badge.svg)](https://github.com/cmccomb/rhai-ml/actions)
+[![tests](https://github.com/rhaiscript/rhai-ml/actions/workflows/tests.yml/badge.svg)](https://github.com/rhaiscript/rhai-ml/actions/workflows/tests.yml)
 [![Crates.io](https://img.shields.io/crates/v/rhai-ml.svg)](https://crates.io/crates/rhai-ml)
 [![docs.rs](https://img.shields.io/docsrs/rhai-ml/latest?logo=rust)](https://docs.rs/rhai-ml)
 
@@ -12,7 +12,7 @@ scripting language. For a complete API reference, check [the docs](https://docs.
 To use the latest released version of `rhai-ml`, add this to your `Cargo.toml`:
 
 ```toml
-rhai-ml = "0.1.0"
+rhai-ml = "0.1.1"
 ```
 
 To use the bleeding edge instead, add this:
