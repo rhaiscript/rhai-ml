@@ -12,7 +12,7 @@ scripting language. For a complete API reference, check [the docs](https://docs.
 To use the latest released version of `rhai-ml`, add this to your `Cargo.toml`:
 
 ```toml
-rhai-ml = "0.1.1"
+rhai-ml = "0.1.2"
 ```
 
 To use the bleeding edge instead, add this:
