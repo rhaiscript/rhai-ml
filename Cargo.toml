@@ -1,6 +1,6 @@
 [package]
 name = "rhai-ml"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 authors = ["Chris McComb <ccmcc2012@gmail.com>"]
 description = "Machine learning in the Rhai scripting language"
