@@ -3,6 +3,7 @@
 ```sh
 cargo test
 cargo test --all-features
+cargo run --example regularization
 cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features

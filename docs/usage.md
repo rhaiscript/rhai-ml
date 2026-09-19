@@ -29,6 +29,31 @@ try {
 Run `cargo run --example quickstart` for an example covering all three algorithms,
 held-out predictions, and script error handling.
 
+## Training options
+
+Use the optional fourth argument to set regularization strength:
+
+```rhai
+let model = train(x, y, "lasso", #{ alpha: 0.1 });
+let classifier = train(x, labels, "logistic", #{ alpha: 1.0 });
+```
+
+| Algorithm | Option | Default | Accepted values |
+| --- | --- | --- | --- |
+| `lasso` | `alpha` (L1 penalty) | `1.0` | Finite nonnegative integer or float |
+| `logistic` | `alpha` (L2 penalty) | `0.0` | Finite nonnegative integer or float |
+| `linear` | None | — | Empty options map only |
+
+Larger alpha values apply a stronger penalty. Values are specific to each
+algorithm; all other training settings retain their existing defaults. Omitting
+the map or passing `#{}` preserves the three-argument call's behavior. Unknown
+keys (including spelling mistakes), invalid values, and options unsupported by
+the chosen algorithm return Rhai errors.
+
+Run `cargo run --example regularization` to compare two lasso settings on fixed
+held-out validation samples. This toy example illustrates the API; it does not
+establish a generally better alpha. Use validation data to choose settings and
+keep a separate test set for final evaluation.
 
 ## Rhai metadata
 

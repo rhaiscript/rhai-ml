@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.4 (2026-09-19)
+
+- Add `train(x, y, algorithm, options)` with an optional `alpha` regularization
+  parameter for lasso and logistic regression. Existing three-argument calls and
+  empty options maps preserve the current defaults.
+- Reject unknown options, unsupported linear-regression options, and nonnumeric,
+  negative, or non-finite alpha values as Rhai errors.
+- Add compatibility and parameter-effect tests and a held-out comparison example.
+
 ## 0.1.3 (2026-09-19)
 
 - Bound dependency ranges to compatible release families. Fresh builds no longer

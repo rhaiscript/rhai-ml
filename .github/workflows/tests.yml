@@ -30,6 +30,8 @@ jobs:
         run: cargo generate-lockfile
       - name: Run behavioral tests and documentation examples
         run: cargo test --locked ${{ matrix.features }}
+      - name: Run the regularization comparison
+        run: cargo run --locked --example regularization ${{ matrix.features }}
 
   minimum-rhai:
     runs-on: ubuntu-latest
@@ -40,6 +42,7 @@ jobs:
       - name: Resolve the minimum supported Rhai version
         run: cargo update -p rhai --precise 1.16.2
       - run: cargo test --locked --all-features
+      - run: cargo run --locked --example regularization --all-features
 
   quality:
     runs-on: ubuntu-latest

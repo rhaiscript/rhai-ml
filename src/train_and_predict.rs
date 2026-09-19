@@ -1,5 +1,5 @@
 use rhai::plugin::*;
-use rhai::{Array, Dynamic, EvalAltResult, Position, FLOAT};
+use rhai::{Array, Dynamic, EvalAltResult, Map, Position, FLOAT};
 use smartcorelib::linalg::basic::matrix::DenseMatrix;
 
 fn error(message: impl std::fmt::Display) -> Box<EvalAltResult> {
@@ -15,6 +15,29 @@ fn number(value: &Dynamic, location: &str) -> Result<FLOAT, Box<EvalAltResult>> 
         return Err(error(format!("{location} must be finite")));
     }
     Ok(number)
+}
+
+fn training_alpha(algorithm: &str, options: &Map) -> Result<Option<FLOAT>, Box<EvalAltResult>> {
+    for key in options.keys() {
+        if algorithm == "linear" {
+            return Err(error(format!("linear does not support option '{key}'")));
+        }
+        if key != "alpha" {
+            return Err(error(format!(
+                "unknown option '{key}' for {algorithm}; supported option: alpha"
+            )));
+        }
+    }
+    options
+        .get("alpha")
+        .map(|value| {
+            let alpha = number(value, "options.alpha")?;
+            if alpha < 0.0 {
+                return Err(error("options.alpha must be nonnegative"));
+            }
+            Ok(alpha)
+        })
+        .transpose()
 }
 
 fn matrix(x: &Array) -> Result<(DenseMatrix<FLOAT>, usize), Box<EvalAltResult>> {
@@ -74,8 +97,8 @@ fn predictions(values: Vec<FLOAT>) -> Result<Array, Box<EvalAltResult>> {
 /// Training and prediction functions exposed to Rhai.
 #[export_module]
 pub mod train_and_predict_functions {
-    use super::{error, matrix, predictions, regression_targets};
-    use rhai::{Array, Dynamic, EvalAltResult, ImmutableString, FLOAT, INT};
+    use super::{error, matrix, predictions, regression_targets, training_alpha};
+    use rhai::{Array, Dynamic, EvalAltResult, ImmutableString, Map, FLOAT, INT};
     use smartcorelib::{
         linalg::basic::matrix::DenseMatrix,
         linear::{
@@ -118,12 +141,38 @@ pub mod train_and_predict_functions {
         y: Array,
         algorithm: ImmutableString,
     ) -> Result<Model, Box<EvalAltResult>> {
+        train_model_with_options(x, y, algorithm, Map::new())
+    }
+
+    /// Trains a model with an options map. Lasso and logistic regression accept
+    /// `alpha`, a finite nonnegative integer or float controlling regularization.
+    /// Higher values apply a stronger penalty. The defaults are `1.0` for lasso
+    /// and `0.0` for logistic regression. Omitting `alpha`, or passing an empty
+    /// map, preserves the defaults of the three-argument `train` call.
+    ///
+    /// Linear regression accepts only an empty map. Unknown options and invalid
+    /// values return Rhai errors. The input requirements are the same as for
+    /// the three-argument call.
+    /// ```typescript
+    /// let x = [[0], [1], [2], [3], [4], [5]];
+    /// let y = [1, 3, 5, 7, 9, 11];
+    /// let model = train(x, y, "lasso", #{ alpha: 0.1 });
+    /// abs(predict([[6]], model)[0] - 13.0) < 0.2;
+    /// ```
+    #[rhai_fn(name = "train", return_raw, pure)]
+    pub fn train_model_with_options(
+        x: &mut Array,
+        y: Array,
+        algorithm: ImmutableString,
+        options: Map,
+    ) -> Result<Model, Box<EvalAltResult>> {
         let algorithm = algorithm.as_str();
         if !matches!(algorithm, "linear" | "lasso" | "logistic") {
             return Err(error(format!(
                 "{algorithm} is not a recognized model type; expected linear, lasso, or logistic"
             )));
         }
+        let alpha = training_alpha(algorithm, &options)?;
         let (xvec, features) = matrix(x)?;
         if y.len() != x.len() {
             return Err(error(format!(
@@ -150,7 +199,15 @@ pub mod train_and_predict_functions {
                 if x.len() <= features {
                     return Err(error("lasso training requires more rows than features"));
                 }
-                let model = Lasso::fit(&xvec, &yvec, LassoParameters::default()).map_err(error)?;
+                let mut parameters = LassoParameters::default();
+                if let Some(alpha) = alpha {
+                    // SmartCore's lasso parameter is f64 even when Rhai uses f32.
+                    #[allow(clippy::unnecessary_cast)]
+                    {
+                        parameters.alpha = alpha as f64;
+                    }
+                }
+                let model = Lasso::fit(&xvec, &yvec, parameters).map_err(error)?;
                 bincode::serialize(&model).map_err(error)?
             }
             "logistic" => {
@@ -165,9 +222,11 @@ pub mod train_and_predict_functions {
                         })
                     })
                     .collect::<Result<Vec<INT>, _>>()?;
-                let model =
-                    LogisticRegression::fit(&xvec, &yvec, LogisticRegressionParameters::default())
-                        .map_err(error)?;
+                let mut parameters = LogisticRegressionParameters::default();
+                if let Some(alpha) = alpha {
+                    parameters.alpha = alpha;
+                }
+                let model = LogisticRegression::fit(&xvec, &yvec, parameters).map_err(error)?;
                 bincode::serialize(&model).map_err(error)?
             }
             _ => return Err(error("unrecognized model type")),

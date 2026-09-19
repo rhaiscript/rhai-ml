@@ -6,12 +6,12 @@
 
 Machine learning for the [Rhai](https://rhai.rs/) scripting language, backed by
 [SmartCore](https://smartcorelib.org/). Train linear, lasso, and logistic regression
-models directly in your scripts.
+models directly in your scripts, with optional regularization settings.
 
 ## Install
 
 ```toml
-rhai-ml = "0.1.3"
+rhai-ml = "0.1.4"
 ```
 
 ## Usage
