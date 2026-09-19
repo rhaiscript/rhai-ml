@@ -97,18 +97,16 @@ fn main() {
                 .to_lowercase();
 
             // Check if there are multiple arities, and if so add a header and indent
-            if idx < function_list.len() - 1 {
-                if name == function_list[idx + 1].name && !indented {
-                    write!(doc_file, "<a href=\"#{}\">{}</a>", name, name)
-                        .expect("Cannot write to {doc_file}");
-                    indented = true;
-                    if idx != function_list.len() - 1 {
-                        write!(doc_file, "&nbsp;&nbsp; ").expect("Cannot write to {doc_file}");
-                    }
+            if idx < function_list.len() - 1 && name == function_list[idx + 1].name && !indented {
+                write!(doc_file, "<a href=\"#{}\">{}</a>", name, name)
+                    .expect("Cannot write to {doc_file}");
+                indented = true;
+                if idx != function_list.len() - 1 {
+                    write!(doc_file, "&nbsp;&nbsp; ").expect("Cannot write to {doc_file}");
                 }
             }
 
-            if indented == false {
+            if !indented {
                 write!(doc_file, "<a href=\"#{}\">{}</a>", id, name)
                     .expect("Cannot write to {doc_file}");
 
@@ -118,14 +116,16 @@ fn main() {
             }
 
             if idx == function_list.len() - 1 {
-                write!(doc_file, "\n").expect("Cannot write to {doc_file}");
+                writeln!(doc_file).expect("Cannot write to {doc_file}");
             }
 
             // End indentation when its time
-            if idx != 0 && idx < function_list.len() - 1 {
-                if name == function_list[idx - 1].name && name != function_list[idx + 1].name {
-                    indented = false;
-                }
+            if idx != 0
+                && idx < function_list.len() - 1
+                && name == function_list[idx - 1].name
+                && name != function_list[idx + 1].name
+            {
+                indented = false;
             }
         }
     }
@@ -152,11 +152,9 @@ fn main() {
                 .replace("$CONSTANTS$()", "physical constants");
 
             // Check if there are multiple arities, and if so add a header and indent
-            if idx < function_list.len() - 1 {
-                if name == function_list[idx + 1].name && !indented {
-                    write!(doc_file, "## `{name}`\n").expect("Cannot write to {doc_file}");
-                    indented = true;
-                }
+            if idx < function_list.len() - 1 && name == function_list[idx + 1].name && !indented {
+                writeln!(doc_file, "## `{name}`").expect("Cannot write to {doc_file}");
+                indented = true;
             }
 
             // Print definition with right level of indentation
@@ -169,10 +167,12 @@ fn main() {
             }
 
             // End indentation when its time
-            if idx != 0 && idx < function_list.len() - 1 {
-                if name == function_list[idx - 1].name && name != function_list[idx + 1].name {
-                    indented = false;
-                }
+            if idx != 0
+                && idx < function_list.len() - 1
+                && name == function_list[idx - 1].name
+                && name != function_list[idx + 1].name
+            {
+                indented = false;
             }
 
             // Run doc tests

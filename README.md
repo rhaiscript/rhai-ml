@@ -2,65 +2,49 @@
 [![Crates.io](https://img.shields.io/crates/v/rhai-ml.svg)](https://crates.io/crates/rhai-ml)
 [![docs.rs](https://img.shields.io/docsrs/rhai-ml/latest?logo=rust)](https://docs.rs/rhai-ml)
 
-# About `rhai-ml`
+# rhai-ml
 
-This crate provides some basic machine learning and artificial intelligence utilities for the [`Rhai`](https://rhai.rs/) 
-scripting language. For a complete API reference, check [the docs](https://docs.rs/rhai-ml).
+Machine learning for the [Rhai](https://rhai.rs/) scripting language, backed by
+[SmartCore](https://smartcorelib.org/). Train linear, lasso, and logistic regression
+models directly in your scripts.
 
-# Install
-
-To use the latest released version of `rhai-ml`, add this to your `Cargo.toml`:
-
-```toml
-rhai-ml = "0.1.2"
-```
-
-To use the bleeding edge instead, add this:
+## Install
 
 ```toml
-rhai-ml = { git = "https://github.com/cmccomb/rhai-ml" }
+rhai-ml = "0.1.3"
 ```
 
-# Usage
-
-Using this crate is pretty simple! If you just want to evaluate a single line of [`Rhai`](https://rhai.rs/), then you only need:
+## Usage
 
 ```rust
-use rhai::FLOAT;
 use rhai_ml::eval;
-let result = eval::<FLOAT>("\
-let xdata = [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0]]; \
-let ydata = [1.0, 2.0, 3.0]; \
-let model = train(xdata, ydata, \"linear\"); \
-let ypred = predict(xdata, model);
-ypred[0]
-").unwrap();
+
+let prediction = eval::<f64>(r#"
+    let model = train([[0], [1], [2], [3]], [1, 3, 5, 7], "linear");
+    predict([[4]], model)[0]
+"#).unwrap();
+
+assert!((prediction - 9.0).abs() < 0.000001);
 ```
 
-If you need to use `rhai-ml` as part of a persistent [`Rhai`](https://rhai.rs/) scripting engine, then do this instead:
+To add the package to an existing Rhai engine:
 
 ```rust
-use rhai::{Engine, packages::Package, FLOAT};
+use rhai::{packages::Package, Engine};
 use rhai_ml::MLPackage;
 
-// Create a new Rhai engine
 let mut engine = Engine::new();
-
-// Add the rhai-ml package to the new engine
 engine.register_global_module(MLPackage::new().as_shared_module());
-
-// Now run your code
-let value = engine.eval::<FLOAT>("\
-let xdata = [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0]]; \
-let ydata = [1.0, 2.0, 3.0]; \
-let model = train(xdata, ydata, \"linear\"); \
-let ypred = predict(xdata, model);
-ypred[0]
-").unwrap();
 ```
 
-# Features
+Inputs must be nonempty rectangular arrays of finite numbers, with one target per
+training row. Logistic regression uses integer class labels. Invalid inputs return
+Rhai errors that scripts can handle with `try`/`catch`.
 
-| Feature     | Default  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ----------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `metadata`  | Disabled | Enables exporting function metadata and is ___necessary for running doc-tests on Rhai examples___.                                                                                                                                                                                                                                                                                                                                                                                                                    |
+The optional `metadata` feature generates API documentation and tests the Rhai
+examples. Run `cargo run --example quickstart` to try all three algorithms.
+
+See the [API reference](https://docs.rs/rhai-ml),
+[input rules and errors](https://github.com/rhaiscript/rhai-ml/blob/master/docs/usage.md),
+[development checks](https://github.com/rhaiscript/rhai-ml/blob/master/CONTRIBUTING.md),
+and [changelog](https://github.com/rhaiscript/rhai-ml/blob/master/CHANGELOG.md).
