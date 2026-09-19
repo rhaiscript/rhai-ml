@@ -1,11 +1,81 @@
 use rhai::plugin::*;
+use rhai::{Array, Dynamic, EvalAltResult, Position, FLOAT};
+use smartcorelib::linalg::basic::matrix::DenseMatrix;
 
-/// Documentation for the module
+fn error(message: impl std::fmt::Display) -> Box<EvalAltResult> {
+    EvalAltResult::ErrorArithmetic(message.to_string(), Position::NONE).into()
+}
+
+fn number(value: &Dynamic, location: &str) -> Result<FLOAT, Box<EvalAltResult>> {
+    let number = value
+        .as_float()
+        .or_else(|_| value.as_int().map(|value| value as FLOAT))
+        .map_err(|_| error(format!("{location} must be a number (integer or float)")))?;
+    if !number.is_finite() {
+        return Err(error(format!("{location} must be finite")));
+    }
+    Ok(number)
+}
+
+fn matrix(x: &Array) -> Result<(DenseMatrix<FLOAT>, usize), Box<EvalAltResult>> {
+    if x.is_empty() {
+        return Err(error("x must contain at least one row"));
+    }
+    let mut rows = Vec::with_capacity(x.len());
+    let mut columns = 0;
+    for (row_index, observation) in x.iter().enumerate() {
+        let row = observation
+            .clone()
+            .into_array()
+            .map_err(|_| error(format!("x[{row_index}] must be an array")))?;
+        if row_index == 0 {
+            columns = row.len();
+            if columns == 0 {
+                return Err(error("x rows must contain at least one feature"));
+            }
+        }
+        if row.len() != columns {
+            return Err(error(format!(
+                "x[{row_index}] has {} features; expected {columns}",
+                row.len()
+            )));
+        }
+        let values = row
+            .iter()
+            .enumerate()
+            .map(|(column, value)| number(value, &format!("x[{row_index}][{column}]")))
+            .collect::<Result<Vec<_>, _>>()?;
+        rows.push(values);
+    }
+    // SmartCore 0.3 requires a nonempty, rectangular matrix; validated above.
+    Ok((DenseMatrix::from_2d_vec(&rows), columns))
+}
+
+fn regression_targets(y: &Array) -> Result<Vec<FLOAT>, Box<EvalAltResult>> {
+    y.iter()
+        .enumerate()
+        .map(|(index, value)| number(value, &format!("y[{index}]")))
+        .collect()
+}
+
+fn predictions(values: Vec<FLOAT>) -> Result<Array, Box<EvalAltResult>> {
+    values
+        .into_iter()
+        .map(|value| {
+            if value.is_finite() {
+                Ok(Dynamic::from_float(value))
+            } else {
+                Err(error("prediction produced a non-finite value"))
+            }
+        })
+        .collect()
+}
+
+/// Training and prediction functions exposed to Rhai.
 #[export_module]
 pub mod train_and_predict_functions {
-
-    use rhai::{Array, Dynamic, EvalAltResult, ImmutableString, Position, FLOAT, INT};
-
+    use super::{error, matrix, predictions, regression_targets};
+    use rhai::{Array, Dynamic, EvalAltResult, ImmutableString, FLOAT, INT};
     use smartcorelib::{
         linalg::basic::matrix::DenseMatrix,
         linear::{
@@ -15,40 +85,32 @@ pub mod train_and_predict_functions {
         },
     };
 
-    fn array_to_vec_float(arr: &mut Array) -> Vec<FLOAT> {
-        arr.into_iter()
-            .map(|el| el.as_float().unwrap())
-            .collect::<Vec<FLOAT>>()
-    }
-
-    #[derive(Clone)]
+    /// An opaque trained model, including its expected number of input features.
+    #[derive(Clone, Default)]
     pub struct Model {
         saved_model: Vec<u8>,
         model_type: String,
+        features: usize,
     }
 
-    impl Default for Model {
-        fn default() -> Self {
-            Model {
-                saved_model: vec![],
-                model_type: String::new(),
-            }
-        }
-    }
-
-    /// Trains a [`smartcore`](https://smartcorelib.org/) machine learning model. The model can then
-    /// be used to make predictions with the [`predict`](#predictx-array-model-model---array)
-    /// function Available model types are:
+    /// Trains a [`smartcore`](https://smartcorelib.org/) machine learning model.
+    /// Use [`predict`](#predictx-array-model-model---array) to make predictions.
+    /// Available model types are:
     /// 1. `linear` - ordinary least squares linear regression
-    /// 2. `logistic` - logistic regression
+    /// 2. `logistic` - logistic regression with integer class labels
     /// 3. `lasso` - lasso regression
+    ///
+    /// `x` must be a nonempty rectangular array of finite numbers. Regression
+    /// targets may be integers or floats; logistic targets must be integers.
+    /// The number of targets must equal the number of rows in `x`. Linear and
+    /// lasso regression require more rows than features. Input validation and
+    /// backend errors are reported as Rhai errors.
     /// ```typescript
-    /// let xdata = [[1.0, 2.0],
-    ///              [2.0, 3.0],
-    ///              [3.0, 4.0]];
-    /// let ydata = [1.0, 2.0, 3.0];
+    /// let xdata = [[0.0], [1.0], [2.0], [3.0]];
+    /// let ydata = [1.0, 3.0, 5.0, 7.0];
     /// let model = train(xdata, ydata, "linear");
-    /// true;
+    /// let ypred = predict([[4.0]], model);
+    /// abs(ypred[0] - 9.0) < 0.000001;
     /// ```
     #[rhai_fn(name = "train", return_raw, pure)]
     pub fn train_model(
@@ -56,179 +118,107 @@ pub mod train_and_predict_functions {
         y: Array,
         algorithm: ImmutableString,
     ) -> Result<Model, Box<EvalAltResult>> {
-        // Make x array
-        let array_as_vec_vec_float = &x
-            .into_iter()
-            .map(|observation| {
-                crate::train_and_predict_functions::array_to_vec_float(
-                    &mut observation.clone().into_array().unwrap(),
-                )
-            })
-            .collect::<Vec<Vec<FLOAT>>>();
-
-        // Check if x array is empty
-        if array_as_vec_vec_float.len() == 0 {
-            Err(EvalAltResult::ErrorArrayBounds(0, 0, Position::NONE).into())
-        } else {
-            let algorithm_string = algorithm.as_str();
-            let xvec = smartcorelib::linalg::basic::matrix::DenseMatrix::from_2d_vec(
-                array_as_vec_vec_float,
-            );
-            match algorithm_string {
-                "linear" => {
-                    let yvec = y
-                        .clone()
-                        .into_iter()
-                        .map(|el| el.as_float().unwrap())
-                        .collect::<Vec<FLOAT>>();
-                    match LinearRegression::fit(&xvec, &yvec, LinearRegressionParameters::default())
-                    {
-                        Ok(model) => Ok(Model {
-                            saved_model: bincode::serialize(&model).unwrap(),
-                            model_type: algorithm_string.to_string(),
-                        }),
-                        Err(e) => Err(EvalAltResult::ErrorArithmetic(
-                            format!("{e}"),
-                            Position::NONE,
-                        )
-                        .into()),
-                    }
-                }
-                "lasso" => {
-                    let yvec = y
-                        .clone()
-                        .into_iter()
-                        .map(|el| el.as_float().unwrap())
-                        .collect::<Vec<FLOAT>>();
-                    match Lasso::fit(&xvec, &yvec, LassoParameters::default()) {
-                        Ok(model) => Ok(Model {
-                            saved_model: bincode::serialize(&model).unwrap(),
-                            model_type: algorithm_string.to_string(),
-                        }),
-                        Err(e) => Err(EvalAltResult::ErrorArithmetic(
-                            format!("{e}"),
-                            Position::NONE,
-                        )
-                        .into()),
-                    }
-                }
-                "logistic" => {
-                    let yvec = y
-                        .clone()
-                        .into_iter()
-                        .map(|el| el.as_int().unwrap())
-                        .collect::<Vec<INT>>();
-                    match LogisticRegression::fit(
-                        &xvec,
-                        &yvec,
-                        LogisticRegressionParameters::default(),
-                    ) {
-                        Ok(model) => Ok(Model {
-                            saved_model: bincode::serialize(&model).unwrap(),
-                            model_type: algorithm_string.to_string(),
-                        }),
-                        Err(e) => Err(EvalAltResult::ErrorArithmetic(
-                            format!("{e}"),
-                            Position::NONE,
-                        )
-                        .into()),
-                    }
-                }
-                &_ => Err(EvalAltResult::ErrorArithmetic(
-                    format!("{} is not a recognized model type.", algorithm_string),
-                    Position::NONE,
-                )
-                .into()),
-            }
+        let algorithm = algorithm.as_str();
+        if !matches!(algorithm, "linear" | "lasso" | "logistic") {
+            return Err(error(format!(
+                "{algorithm} is not a recognized model type; expected linear, lasso, or logistic"
+            )));
         }
+        let (xvec, features) = matrix(x)?;
+        if y.len() != x.len() {
+            return Err(error(format!(
+                "y has {} targets; expected {} (one per row of x)",
+                y.len(),
+                x.len()
+            )));
+        }
+        let saved_model = match algorithm {
+            "linear" => {
+                let yvec = regression_targets(&y)?;
+                // The SVD solver needs at least as many rows as columns, including
+                // the intercept column that SmartCore adds to the design matrix.
+                if x.len() <= features {
+                    return Err(error("linear training requires more rows than features"));
+                }
+                let model =
+                    LinearRegression::fit(&xvec, &yvec, LinearRegressionParameters::default())
+                        .map_err(error)?;
+                bincode::serialize(&model).map_err(error)?
+            }
+            "lasso" => {
+                let yvec = regression_targets(&y)?;
+                if x.len() <= features {
+                    return Err(error("lasso training requires more rows than features"));
+                }
+                let model = Lasso::fit(&xvec, &yvec, LassoParameters::default()).map_err(error)?;
+                bincode::serialize(&model).map_err(error)?
+            }
+            "logistic" => {
+                let yvec = y
+                    .iter()
+                    .enumerate()
+                    .map(|(index, value)| {
+                        value.as_int().map_err(|_| {
+                            error(format!(
+                                "y[{index}] must be an integer class label for logistic"
+                            ))
+                        })
+                    })
+                    .collect::<Result<Vec<INT>, _>>()?;
+                let model =
+                    LogisticRegression::fit(&xvec, &yvec, LogisticRegressionParameters::default())
+                        .map_err(error)?;
+                bincode::serialize(&model).map_err(error)?
+            }
+            _ => return Err(error("unrecognized model type")),
+        };
+        Ok(Model {
+            saved_model,
+            model_type: algorithm.to_owned(),
+            features,
+        })
     }
 
-    /// Uses a [`smartcore`](https://smartcorelib.org/) machine learning model (trained with the
-    /// [`train`](#trainx-array-y-array-algorithm-immutablestring---model) function to predict
-    /// dependent variables.
+    /// Predicts dependent variables with a model produced by `train`.
+    /// `x` must be a nonempty rectangular array of finite numbers with the same
+    /// number of features as the training data. Regression returns floats;
+    /// logistic regression returns integer class labels.
     /// ```typescript
-    /// let xdata = [[1.0, 2.0],
-    ///              [2.0, 3.0],
-    ///              [3.0, 4.0]];
-    /// let ydata = [1.0, 2.0, 3.0];
-    /// let model = train(xdata, ydata, "linear");
-    /// let ypred = predict(xdata, model);
-    /// true
+    /// let model = train([[0], [1], [2], [3]], [1, 3, 5, 7], "linear");
+    /// let ypred = predict([[4], [5]], model);
+    /// abs(ypred[0] - 9.0) < 0.000001 && abs(ypred[1] - 11.0) < 0.000001;
     /// ```
     #[rhai_fn(name = "predict", return_raw, pure)]
     pub fn predict_with_model(x: &mut Array, model: Model) -> Result<Array, Box<EvalAltResult>> {
-        // Make x array
-        let array_as_vec_vec_float = &x
-            .into_iter()
-            .map(|observation| {
-                crate::train_and_predict_functions::array_to_vec_float(
-                    &mut observation.clone().into_array().unwrap(),
-                )
-            })
-            .collect::<Vec<Vec<FLOAT>>>();
-
-        // Check if x array is empty
-        if array_as_vec_vec_float.len() == 0 {
-            Err(EvalAltResult::ErrorArrayBounds(0, 0, Position::NONE).into())
-        } else {
-            let xvec = DenseMatrix::from_2d_vec(array_as_vec_vec_float);
-            let algorithm_string = model.model_type.as_str();
-            match algorithm_string {
-                "linear" => {
-                    let model_ready: LinearRegression<
-                        FLOAT,
-                        FLOAT,
-                        DenseMatrix<FLOAT>,
-                        Vec<FLOAT>,
-                    > = bincode::deserialize(&*model.saved_model).unwrap();
-                    return match model_ready.predict(&xvec) {
-                        Ok(y) => Ok(y
-                            .into_iter()
-                            .map(|observation| Dynamic::from_float(observation))
-                            .collect::<Vec<Dynamic>>()),
-                        Err(e) => Err(EvalAltResult::ErrorArithmetic(
-                            format!("{e}"),
-                            Position::NONE,
-                        )
-                        .into()),
-                    };
-                }
-                "lasso" => {
-                    let model_ready: Lasso<FLOAT, FLOAT, DenseMatrix<FLOAT>, Vec<FLOAT>> =
-                        bincode::deserialize(&*model.saved_model).unwrap();
-                    return match model_ready.predict(&xvec) {
-                        Ok(y) => Ok(y
-                            .into_iter()
-                            .map(|observation| Dynamic::from_float(observation))
-                            .collect::<Vec<Dynamic>>()),
-                        Err(e) => Err(EvalAltResult::ErrorArithmetic(
-                            format!("{e}"),
-                            Position::NONE,
-                        )
-                        .into()),
-                    };
-                }
-                "logistic" => {
-                    let model_ready: LogisticRegression<FLOAT, INT, DenseMatrix<FLOAT>, Vec<INT>> =
-                        bincode::deserialize(&*model.saved_model).unwrap();
-                    return match model_ready.predict(&xvec) {
-                        Ok(y) => Ok(y
-                            .into_iter()
-                            .map(|observation| Dynamic::from_int(observation))
-                            .collect::<Vec<Dynamic>>()),
-                        Err(e) => Err(EvalAltResult::ErrorArithmetic(
-                            format!("{e}"),
-                            Position::NONE,
-                        )
-                        .into()),
-                    };
-                }
-                &_ => Err(EvalAltResult::ErrorArithmetic(
-                    format!("{} is not a recognized model type.", algorithm_string),
-                    Position::NONE,
-                )
-                .into()),
+        let (xvec, features) = matrix(x)?;
+        if features != model.features {
+            return Err(error(format!(
+                "x has {features} features; model expects {}",
+                model.features
+            )));
+        }
+        match model.model_type.as_str() {
+            "linear" => {
+                let model_ready: LinearRegression<FLOAT, FLOAT, DenseMatrix<FLOAT>, Vec<FLOAT>> =
+                    bincode::deserialize(&model.saved_model).map_err(error)?;
+                predictions(model_ready.predict(&xvec).map_err(error)?)
             }
+            "lasso" => {
+                let model_ready: Lasso<FLOAT, FLOAT, DenseMatrix<FLOAT>, Vec<FLOAT>> =
+                    bincode::deserialize(&model.saved_model).map_err(error)?;
+                predictions(model_ready.predict(&xvec).map_err(error)?)
+            }
+            "logistic" => {
+                let model_ready: LogisticRegression<FLOAT, INT, DenseMatrix<FLOAT>, Vec<INT>> =
+                    bincode::deserialize(&model.saved_model).map_err(error)?;
+                Ok(model_ready
+                    .predict(&xvec)
+                    .map_err(error)?
+                    .into_iter()
+                    .map(Dynamic::from_int)
+                    .collect())
+            }
+            algorithm => Err(error(format!("{algorithm} is not a recognized model type"))),
         }
     }
 }
